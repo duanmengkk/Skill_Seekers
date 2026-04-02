@@ -66,8 +66,30 @@ UNIVERSAL_ARGUMENTS: dict[str, dict[str, Any]] = {
         "flags": ("--api-key",),
         "kwargs": {
             "type": str,
-            "help": "API key for enhancement (ANTHROPIC_API_KEY, GOOGLE_API_KEY, OPENAI_API_KEY, MOONSHOT_API_KEY)",
+            "help": "API key for enhancement (ANTHROPIC_API_KEY, GOOGLE_API_KEY, OPENAI_API_KEY, MOONSHOT_API_KEY, CUSTOM_API_KEY)",
             "metavar": "KEY",
+        },
+    },
+    "target": {
+        "flags": ("--target",),
+        "kwargs": {
+            "type": str,
+            "choices": ["claude", "gemini", "openai", "kimi", "custom"],
+            "help": (
+                "AI platform for enhancement (uses API mode). "
+                "Auto-detected from env vars if not specified: "
+                "ANTHROPIC_API_KEY->claude, GOOGLE_API_KEY->gemini, OPENAI_API_KEY->openai, MOONSHOT_API_KEY->kimi, CUSTOM_API_KEY->custom. "
+                "Falls back to LOCAL mode (AI coding agent) when no API keys are found."
+            ),
+            "metavar": "PLATFORM",
+        },
+    },
+    "base_url": {
+        "flags": ("--base-url",),
+        "kwargs": {
+            "type": str,
+            "help": "Custom API base URL (required for --target custom, e.g., https://your-endpoint.com/api/v1)",
+            "metavar": "URL",
         },
     },
     # Behavior arguments

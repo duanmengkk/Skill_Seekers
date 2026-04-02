@@ -313,7 +313,7 @@ def api_keys_menu():
     print("╚═══════════════════════════════════════════════════╝\n")
 
     print("Current status:")
-    for provider in ["anthropic", "google", "openai", "moonshot"]:
+    for provider in ["anthropic", "google", "openai", "moonshot", "custom"]:
         key = config.get_api_key(provider)
         status = "✅ Set" if key else "❌ Not set"
         source = ""
@@ -325,6 +325,7 @@ def api_keys_menu():
                 "google": "GOOGLE_API_KEY",
                 "openai": "OPENAI_API_KEY",
                 "moonshot": "MOONSHOT_API_KEY",
+                "custom": "CUSTOM_API_KEY",
             }[provider]
             source = " (from environment)" if os.getenv(env_var) else " (from config)"
         print(f"  • {provider.capitalize()}: {status}{source}")
@@ -334,15 +335,17 @@ def api_keys_menu():
     print("  2. Set Google (Gemini) API Key")
     print("  3. Set OpenAI (ChatGPT) API Key")
     print("  4. Set Moonshot (Kimi) API Key")
+    print("  5. Set Custom API Key")
     print("  0. Back to Main Menu\n")
 
-    choice = input("Select an option [0-4]: ").strip()
+    choice = input("Select an option [0-5]: ").strip()
 
     provider_map = {
         "1": ("anthropic", "https://console.anthropic.com/settings/keys"),
         "2": ("google", "https://makersuite.google.com/app/apikey"),
         "3": ("openai", "https://platform.openai.com/api-keys"),
         "4": ("moonshot", "https://platform.moonshot.cn/"),
+        "5": ("custom", "https://your-custom-api-endpoint.com"),
     }
 
     if choice in provider_map:

@@ -78,6 +78,7 @@ DEFAULT_MODELS = {
     "moonshot": "moonshot-v1-auto",
     "google": "gemini-2.0-flash",
     "openai": "gpt-4o",
+    "custom": "minimax-m2.5",
 }
 
 # API key env var → provider mapping
@@ -87,6 +88,7 @@ API_KEY_MAP = {
     "MOONSHOT_API_KEY": "moonshot",
     "GOOGLE_API_KEY": "google",
     "OPENAI_API_KEY": "openai",
+    "CUSTOM_API_KEY": "custom",
 }
 
 DEFAULT_ENHANCE_TIMEOUT = 2700  # 45 minutes
@@ -120,6 +122,7 @@ PROVIDER_TARGET_MAP = {
     "moonshot": "kimi",
     "google": "gemini",
     "openai": "openai",
+    "custom": "custom",
 }
 
 
@@ -236,6 +239,22 @@ class AgentClient:
 
                 genai.configure(api_key=self.api_key)
                 return genai
+            elif self.provider == "custom":
+                import anthropic
+
+                kwargs = {"api_key": self.api_key}
+                base_url = os.environ.get("CUSTOM_BASE_URL")
+                if base_url:
+                    kwargs["base_url"] = base_url
+
+                # Auto-generate auth headers from CUSTOM_API_KEY
+                default_headers = {
+                    "Authorization": f"Bearer {self.api_key}",
+                    "x-api-key": self.api_key,
+                }
+                kwargs["default_headers"] = default_headers
+
+                return anthropic.Anthropic(**kwargs)
         except ImportError as e:
             logger.info(f"{self.provider} SDK not installed, falling back to LOCAL mode: {e}")
             self.mode = "local"
@@ -284,14 +303,20 @@ class AgentClient:
         model = self.get_model(self.provider)
 
         try:
-            if self.provider in ("anthropic", "moonshot"):
+            if self.provider in ("anthropic", "moonshot", "custom"):
                 response = self.client.messages.create(
                     model=model,
                     max_tokens=max_tokens,
                     messages=[{"role": "user", "content": prompt}],
                     timeout=120,
                 )
-                return response.content[0].text
+                # Handle different content block types (TextBlock, ThinkingBlock, etc.)
+                for block in response.content:
+                    if hasattr(block, "text") and block.text:
+                        return block.text
+                    elif hasattr(block, "thinking") and block.thinking:
+                        return block.thinking
+                return None
 
             elif self.provider == "openai":
                 response = self.client.chat.completions.create(
@@ -522,6 +547,7 @@ class AgentClient:
             "moonshot": "MOONSHOT_MODEL",
             "google": "GOOGLE_MODEL",
             "openai": "OPENAI_MODEL",
+            "custom": "CUSTOM_MODEL",
         }
         env_var = provider_env_map.get(provider)
         if env_var:

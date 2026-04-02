@@ -47,6 +47,7 @@ def _get_api_keys() -> dict[str, str | None]:
         "gemini": os.environ.get("GOOGLE_API_KEY"),
         "openai": os.environ.get("OPENAI_API_KEY"),
         "kimi": os.environ.get("MOONSHOT_API_KEY"),
+        "custom": os.environ.get("CUSTOM_API_KEY"),
     }
 
 
@@ -81,9 +82,11 @@ def _pick_mode(args) -> tuple[str, str | None]:
         return "api", config_agent
 
     # 3. Auto-detect from environment variables.
-    #    Priority: Anthropic > Gemini > OpenAI.
+    #    Priority: Anthropic > Custom > Gemini > OpenAI.
     if api_keys["claude"]:
         return "api", "claude"
+    if api_keys["custom"]:
+        return "api", "custom"
     if api_keys["gemini"]:
         return "api", "gemini"
     if api_keys["openai"]:
@@ -110,6 +113,7 @@ def _run_api_mode(args, target: str) -> int:
             "claude": api_keys["claude"],
             "gemini": api_keys["gemini"],
             "openai": api_keys["openai"],
+            "custom": api_keys["custom"],
         }
         api_key = env_map.get(target)
 

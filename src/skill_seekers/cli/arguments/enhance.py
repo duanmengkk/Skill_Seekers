@@ -22,11 +22,11 @@ ENHANCE_ARGUMENTS: dict[str, dict[str, Any]] = {
         "flags": ("--target",),
         "kwargs": {
             "type": str,
-            "choices": ["claude", "gemini", "openai", "kimi"],
+            "choices": ["claude", "gemini", "openai", "kimi", "custom"],
             "help": (
                 "AI platform for enhancement (uses API mode). "
                 "Auto-detected from env vars if not specified: "
-                "ANTHROPIC_API_KEY->claude, GOOGLE_API_KEY->gemini, OPENAI_API_KEY->openai, MOONSHOT_API_KEY->kimi. "
+                "ANTHROPIC_API_KEY->claude, GOOGLE_API_KEY->gemini, OPENAI_API_KEY->openai, MOONSHOT_API_KEY->kimi, CUSTOM_API_KEY->custom. "
                 "Falls back to LOCAL mode (AI coding agent) when no API keys are found."
             ),
             "metavar": "PLATFORM",

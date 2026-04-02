@@ -530,7 +530,7 @@ Examples:
     )
     parser.add_argument(
         "--target",
-        choices=["claude", "gemini", "openai", "kimi"],
+        choices=["claude", "gemini", "openai", "kimi", "custom"],
         default=None,
         help="Target LLM platform (auto-detected from API keys, or 'claude' if none set)",
     )
@@ -578,6 +578,11 @@ Examples:
     # Check if platform supports enhancement
     try:
         from skill_seekers.cli.adaptors import get_adaptor
+
+        # Handle custom provider (uses AgentClient with CUSTOM_* env vars)
+        if args.target == "custom":
+            _run_custom_enhancement(args, skill_dir)
+            return
 
         adaptor = get_adaptor(args.target)
 
@@ -635,6 +640,163 @@ Examples:
 
         traceback.print_exc()
         sys.exit(1)
+
+
+def _run_custom_enhancement(args, skill_dir: str):
+    """Run enhancement using custom provider (CUSTOM_* env vars)."""
+    from pathlib import Path
+    from skill_seekers.cli.agent_client import AgentClient
+
+    skill_dir = Path(skill_dir)
+    references_dir = skill_dir / "references"
+    skill_md_path = skill_dir / "SKILL.md"
+
+    # Get API key
+    api_key = args.api_key
+    if not api_key:
+        api_key = os.environ.get("CUSTOM_API_KEY", "").strip()
+
+    if not api_key:
+        print("❌ Error: CUSTOM_API_KEY not set")
+        print("\nSet your custom API configuration:")
+        print("  export CUSTOM_API_KEY=...")
+        print("  export CUSTOM_BASE_URL=...")
+        print("  export CUSTOM_MODEL=minimax-m2.5")
+        print("\nOr provide it directly:")
+        print(f"  skill-seekers enhance {skill_dir} --target custom --api-key ...")
+        sys.exit(1)
+
+    # Check reference files
+    print("Reading reference documentation...")
+    references = {}
+    if references_dir.exists():
+        for ref_file in sorted(references_dir.glob("*.md")):
+            try:
+                content = ref_file.read_text(encoding="utf-8")
+                if len(content) > 30000:
+                    content = content[:30000] + "\n\n...(truncated)"
+                references[ref_file.name] = content
+            except Exception as e:
+                print(f"  Could not read {ref_file.name}: {e}")
+
+    if not references:
+        print("No reference files found to analyze")
+        sys.exit(1)
+
+    print(f"  Read {len(references)} reference files")
+    total_size = sum(len(c) for c in references.values())
+    print(f"  Total size: {total_size:,} characters\n")
+
+    # Read current SKILL.md
+    current_skill_md = None
+    if skill_md_path.exists():
+        current_skill_md = skill_md_path.read_text(encoding="utf-8")
+        print(f"  Found existing SKILL.md ({len(current_skill_md)} chars)")
+    else:
+        print("  No existing SKILL.md, will create new one")
+
+    # Build prompt
+    prompt = _build_custom_prompt(skill_dir.name, references, current_skill_md)
+
+    model = os.environ.get("CUSTOM_MODEL", "minimax-m2.5")
+    print(f"\n{'=' * 60}")
+    print(f"ENHANCING SKILL: {skill_dir}")
+    print(f"Platform: Custom API")
+    print(f"Model: {model}")
+    print(f"{'=' * 60}\n")
+
+    print(f"  Input: {len(prompt):,} characters")
+
+    # Use AgentClient for API call
+    os.environ["CUSTOM_API_KEY"] = api_key
+    client = AgentClient(mode="api")
+
+    if not client.client:
+        print("❌ Error: Failed to initialize custom API client")
+        print("  Check CUSTOM_BASE_URL and CUSTOM_API_KEY settings")
+        sys.exit(1)
+
+    try:
+        enhanced_content = client.call(prompt, max_tokens=4096)
+
+        if not enhanced_content:
+            print("❌ Error: No response from custom API")
+            sys.exit(1)
+
+        print(f"  Generated enhanced SKILL.md ({len(enhanced_content)} chars)\n")
+
+        if skill_md_path.exists():
+            backup_path = skill_md_path.with_suffix(".md.backup")
+            skill_md_path.rename(backup_path)
+            print(f"  Backed up original to: {backup_path.name}")
+
+        skill_md_path.write_text(enhanced_content, encoding="utf-8")
+        print("  Saved enhanced SKILL.md")
+
+        print("\n✅ Enhancement complete!")
+        print("\nNext steps:")
+        print(f"  1. Review: {skill_md_path}")
+        print(
+            f"  2. If you don't like it, restore backup: {skill_md_path.with_suffix('.md.backup')}"
+        )
+        print("  3. Package your skill:")
+        print(f"     skill-seekers package {skill_dir}/ --target custom")
+
+        sys.exit(0)
+
+    except Exception as e:
+        print(f"❌ Error calling custom API: {e}")
+        sys.exit(1)
+
+
+def _build_custom_prompt(
+    skill_name: str, references: dict[str, str], current_skill_md: str = None
+) -> str:
+    """Build prompt for custom API enhancement."""
+    prompt = f"""You are creating system instructions for an AI assistant about: {skill_name}
+
+I've scraped documentation and organized it into reference files. Your job is to create EXCELLENT system instructions that will help the assistant use this documentation effectively.
+
+CURRENT INSTRUCTIONS:
+{"```" if current_skill_md else "(none - create from scratch)"}
+{current_skill_md or "No existing instructions"}
+{"```" if current_skill_md else ""}
+
+REFERENCE DOCUMENTATION:
+"""
+
+    for filename, content in references.items():
+        prompt += f"\n\n## {filename}\n```markdown\n{content[:30000]}\n```\n"
+
+    prompt += f"""
+
+YOUR TASK:
+Create enhanced system instructions that include:
+
+1. **Clear role definition** - "You are an expert assistant for [topic]"
+2. **Knowledge base description** - What documentation is attached
+3. **Excellent Quick Reference** - Extract 5-10 of the BEST, most practical code examples from the reference docs
+   - Choose SHORT, clear examples that demonstrate common tasks
+   - Include both simple and intermediate examples
+   - Annotate examples with clear descriptions
+   - Use proper language tags (cpp, python, javascript, json, etc.)
+4. **Response guidelines** - How the assistant should help users
+5. **Search strategy** - How to find information in the knowledge base
+6. **DO NOT use YAML frontmatter** - This is plain text instructions
+
+IMPORTANT:
+- Extract REAL examples from the reference docs, don't make them up
+- Prioritize SHORT, clear examples (5-20 lines max)
+- Make it actionable and practical
+- Write clear, direct instructions
+- Focus on how the assistant should behave and respond
+- NO YAML frontmatter (no --- blocks)
+
+OUTPUT:
+Return ONLY the complete system instructions as plain text.
+"""
+
+    return prompt
 
 
 if __name__ == "__main__":
